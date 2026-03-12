@@ -1,0 +1,1989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed AI Compute — A Gradient Research Analysis</title>
+    <meta name="description" content="How distributed AI inference and training is solving the cost, environmental, and accessibility problems of centralized cloud computing. Based on Gradient's published research.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+/* ============================================
+   RESET & VARIABLES
+   ============================================ */
+:root {
+    --bg: #fafafa;
+    --bg-card: #ffffff;
+    --bg-code: #f4f4f8;
+    --bg-dark-section: #111114;
+    --bg-dark-card: #1a1a1f;
+    --text: #111114;
+    --text-secondary: #555566;
+    --text-muted: #888899;
+    --text-on-dark: #f0f0f5;
+    --text-on-dark-secondary: #aaaabb;
+    --accent: #5b21b6;
+    --accent-light: #7c3aed;
+    --accent-blue: #2563eb;
+    --accent-teal: #0d9488;
+    --accent-red: #dc2626;
+    --accent-green: #16a34a;
+    --accent-orange: #ea580c;
+    --border: #e5e5ea;
+    --border-dark: #2a2a33;
+    --font-body: 'Inter', -apple-system, system-ui, sans-serif;
+    --font-heading: 'Space Grotesk', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --content-w: min(720px, 90vw);
+    --wide-w: min(1080px, 95vw);
+    --radius: 12px;
+    --radius-sm: 8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+body {
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    min-width: 320px;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: inherit; text-decoration: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ============================================
+   ANIMATED BACKGROUND
+   ============================================ */
+.animated-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: -1;
+    opacity: 0.4;
+}
+.animated-bg::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: 
+        radial-gradient(ellipse at 20% 20%, rgba(91, 33, 182, 0.03) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(37, 99, 235, 0.03) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(13, 148, 136, 0.02) 0%, transparent 50%);
+    animation: bgShift 20s ease-in-out infinite;
+}
+@keyframes bgShift {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    33% { transform: translate(2%, 2%) rotate(1deg); }
+    66% { transform: translate(-1%, 1%) rotate(-1deg); }
+}
+
+/* Floating particles */
+.particles {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: -1;
+    overflow: hidden;
+}
+.particle {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: rgba(91, 33, 182, 0.15);
+    border-radius: 50%;
+    animation: float 15s infinite ease-in-out;
+}
+.particle:nth-child(1) { left: 10%; animation-delay: 0s; animation-duration: 12s; }
+.particle:nth-child(2) { left: 20%; animation-delay: 2s; animation-duration: 18s; }
+.particle:nth-child(3) { left: 30%; animation-delay: 4s; animation-duration: 14s; }
+.particle:nth-child(4) { left: 40%; animation-delay: 1s; animation-duration: 16s; }
+.particle:nth-child(5) { left: 50%; animation-delay: 3s; animation-duration: 20s; }
+.particle:nth-child(6) { left: 60%; animation-delay: 5s; animation-duration: 13s; }
+.particle:nth-child(7) { left: 70%; animation-delay: 2s; animation-duration: 17s; }
+.particle:nth-child(8) { left: 80%; animation-delay: 4s; animation-duration: 15s; }
+.particle:nth-child(9) { left: 90%; animation-delay: 1s; animation-duration: 19s; }
+.particle:nth-child(10) { left: 15%; animation-delay: 6s; animation-duration: 14s; }
+@keyframes float {
+    0%, 100% { transform: translateY(100vh) scale(0); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+}
+
+/* Grid pattern */
+.grid-pattern {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: -1;
+    opacity: 0.02;
+    background-image: 
+        linear-gradient(rgba(91, 33, 182, 0.5) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(91, 33, 182, 0.5) 1px, transparent 1px);
+    background-size: clamp(30px, 4vw, 50px) clamp(30px, 4vw, 50px);
+}
+
+/* ============================================
+   PROGRESS BAR
+   ============================================ */
+#progress {
+    position: fixed; top: 0; left: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-light), var(--accent-blue));
+    z-index: 9999; width: 0%; transition: width 0.1s;
+    pointer-events: none;
+}
+
+/* ============================================
+   NAV
+   ============================================ */
+header {
+    position: fixed; top: 0; width: 100%; z-index: 9998;
+    background: rgba(250,250,250,0.85);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    transition: box-shadow 0.3s;
+}
+header.shadow { box-shadow: 0 1px 8px rgba(0,0,0,0.06); }
+nav {
+    max-width: var(--wide-w); margin: 0 auto;
+    padding: 0 clamp(1rem, 4vw, 1.5rem); height: 60px;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.nav-logo {
+    font-family: var(--font-heading); font-weight: 700;
+    font-size: clamp(0.85rem, 2.5vw, 1rem); display: flex; align-items: center; gap: 0.5rem;
+}
+.nav-logo-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+}
+.nav-links { display: flex; gap: clamp(1rem, 3vw, 2rem); list-style: none; }
+.nav-links a {
+    font-size: 0.875rem; color: var(--text-secondary);
+    font-weight: 500; transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--text); }
+.nav-cta {
+    font-size: 0.8rem; font-weight: 600;
+    color: #fff; background: var(--text);
+    padding: 0.5rem 1rem; border-radius: 6px;
+    transition: opacity 0.2s;
+}
+.nav-cta:hover { opacity: 0.8; }
+.hamburger {
+    display: none; background: none; border: none; cursor: pointer;
+    flex-direction: column; gap: 4px; padding: 4px;
+}
+.hamburger span {
+    width: 20px; height: 2px; background: var(--text); border-radius: 1px;
+}
+.mobile-menu {
+    display: none; position: fixed; inset: 0;
+    background: rgba(250,250,250,0.98); z-index: 9997;
+    flex-direction: column; align-items: center; justify-content: center; gap: 2rem;
+}
+.mobile-menu.open { display: flex; }
+.mobile-menu a {
+    font-family: var(--font-heading); font-size: 1.25rem; font-weight: 600;
+}
+.mobile-menu-close {
+    position: absolute; top: 1rem; right: 1.5rem;
+    background: none; border: none; font-size: 1.5rem; cursor: pointer;
+}
+
+/* ============================================
+   HERO
+   ============================================ */
+.hero {
+    padding: clamp(7rem, 15vw, 10rem) clamp(1rem, 4vw, 1.5rem) clamp(4rem, 10vw, 6rem);
+    text-align: center;
+    max-width: min(800px, 95vw);
+    margin: 0 auto;
+}
+.hero-tag {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    font-family: var(--font-mono); font-size: clamp(0.65rem, 1.8vw, 0.75rem);
+    color: var(--accent); background: rgba(91,33,182,0.06);
+    padding: 0.35rem 0.85rem; border-radius: 20px;
+    margin-bottom: 1.5rem; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.08em;
+}
+.hero h1 {
+    font-family: var(--font-heading); font-weight: 700;
+    font-size: clamp(1.8rem, 6vw, 3.75rem);
+    line-height: 1.1; letter-spacing: -0.03em;
+    margin-bottom: 1.25rem; color: var(--text);
+}
+.gradient-text {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 50%, var(--accent-blue) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.hero p {
+    font-size: clamp(0.95rem, 2.5vw, 1.2rem);
+    color: var(--text-secondary); max-width: min(600px, 90vw);
+    margin: 0 auto 2rem; line-height: 1.7;
+}
+.hero-buttons { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+.btn-dark {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: var(--text); color: #fff;
+    padding: 0.75rem 1.5rem; border-radius: var(--radius-sm);
+    font-weight: 600; font-size: clamp(0.8rem, 2vw, 0.9rem); transition: opacity 0.2s; border: none; cursor: pointer;
+}
+.btn-dark:hover { opacity: 0.85; }
+.btn-outline {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: transparent; color: var(--text);
+    padding: 0.75rem 1.5rem; border-radius: var(--radius-sm);
+    font-weight: 600; font-size: clamp(0.8rem, 2vw, 0.9rem);
+    border: 1.5px solid var(--border); transition: all 0.2s; cursor: pointer;
+}
+.btn-outline:hover { border-color: var(--text); background: rgba(0,0,0,0.02); }
+
+/* ============================================
+   ARTICLE PROSE
+   ============================================ */
+.prose { max-width: var(--content-w); margin: 0 auto; padding: 0 clamp(1rem, 4vw, 1.5rem); }
+.prose h2 {
+    font-family: var(--font-heading); font-weight: 700;
+    font-size: clamp(1.3rem, 4vw, 2rem);
+    line-height: 1.2; margin: 4rem 0 1.25rem;
+    letter-spacing: -0.02em;
+}
+.prose h3 {
+    font-family: var(--font-heading); font-weight: 600;
+    font-size: clamp(1.05rem, 3vw, 1.2rem); margin: 2.5rem 0 0.75rem;
+    color: var(--text);
+}
+.prose p {
+    font-size: clamp(0.95rem, 2.5vw, 1.05rem); color: var(--text-secondary);
+    margin-bottom: 1.5rem; line-height: 1.8;
+}
+.prose p strong { color: var(--text); font-weight: 600; }
+.prose a.text-link {
+    color: var(--accent); text-decoration: underline;
+    text-decoration-color: rgba(91,33,182,0.3);
+    text-underline-offset: 3px; transition: text-decoration-color 0.2s;
+}
+.prose a.text-link:hover { text-decoration-color: var(--accent); }
+
+/* Section label */
+.section-tag {
+    font-family: var(--font-mono); font-size: clamp(0.65rem, 1.8vw, 0.72rem);
+    color: var(--accent); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 0.75rem; display: block;
+}
+
+/* Callout */
+.callout {
+    background: var(--bg-code);
+    border-left: 3px solid var(--accent);
+    padding: 1.25rem clamp(1rem, 3vw, 1.5rem);
+    margin: 1.75rem 0;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.callout p { margin: 0; font-size: clamp(0.9rem, 2.3vw, 0.98rem); }
+
+/* Source callout */
+.source-box {
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 1rem 1.25rem;
+    margin: 1.5rem 0;
+    font-size: clamp(0.8rem, 2vw, 0.85rem);
+    color: var(--text-muted);
+}
+.source-box strong { color: var(--text-secondary); }
+
+/* Quote */
+.prose blockquote {
+    border-left: 3px solid var(--border);
+    padding: 1rem 0 1rem clamp(1rem, 3vw, 1.5rem);
+    margin: 2rem 0;
+    font-style: italic;
+    color: var(--text);
+    font-size: clamp(1rem, 2.5vw, 1.1rem);
+    line-height: 1.7;
+}
+.prose blockquote cite {
+    display: block; margin-top: 0.75rem;
+    font-style: normal; font-size: clamp(0.75rem, 2vw, 0.82rem);
+    color: var(--text-muted); font-family: var(--font-mono);
+}
+
+/* ============================================
+   INTERACTIVE CHARTS
+   ============================================ */
+.chart-section {
+    max-width: var(--wide-w); margin: 3rem auto;
+    padding: 0 clamp(1rem, 4vw, 1.5rem);
+}
+.chart-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));
+    gap: 1.25rem;
+}
+.chart-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: clamp(1rem, 2.5vw, 1.5rem);
+    position: relative;
+    transition: border-color 0.2s, transform 0.3s, box-shadow 0.3s;
+    cursor: default;
+    overflow: hidden;
+}
+.chart-card:hover { 
+    border-color: #ccc; 
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.1);
+}
+.chart-card h4 {
+    font-family: var(--font-heading); font-size: clamp(0.85rem, 2.2vw, 0.95rem);
+    font-weight: 600; margin-bottom: 0.35rem;
+    line-height: 1.3;
+}
+.chart-card .chart-subtitle {
+    font-size: clamp(0.7rem, 1.6vw, 0.75rem); 
+    color: var(--text-muted); 
+    margin-bottom: 1rem;
+    line-height: 1.4;
+}
+.chart-card .chart-source {
+    font-size: clamp(0.62rem, 1.4vw, 0.7rem); 
+    color: var(--text-muted);
+    margin-top: 0.875rem; 
+    font-family: var(--font-mono);
+    line-height: 1.4;
+}
+
+/* Bar chart - Modern responsive design */
+.bar-chart { display: flex; flex-direction: column; gap: 0.75rem; }
+.bar-row {
+    display: flex; align-items: center; gap: 0.75rem;
+    position: relative;
+}
+.bar-label {
+    width: clamp(60px, 18vw, 85px); font-size: clamp(0.68rem, 1.6vw, 0.75rem); font-weight: 500;
+    text-align: right; flex-shrink: 0; color: var(--text-secondary);
+    line-height: 1.2;
+}
+.bar-track {
+    flex: 1; height: clamp(18px, 4vw, 24px); background: var(--bg-code);
+    border-radius: 4px; overflow: hidden; position: relative;
+}
+.bar-fill {
+    height: 100%; border-radius: 4px;
+    transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+    width: 0;
+    display: flex; align-items: center; padding-left: 0.5rem;
+    font-size: clamp(0.6rem, 1.4vw, 0.7rem); font-weight: 600; color: #fff;
+    font-family: var(--font-mono);
+    white-space: nowrap;
+}
+.bar-fill.animated { width: var(--target-width); }
+.bar-fill.red { background: linear-gradient(90deg, #ef4444, #dc2626); }
+.bar-fill.orange { background: linear-gradient(90deg, #f97316, #ea580c); }
+.bar-fill.blue { background: linear-gradient(90deg, #3b82f6, #2563eb); }
+.bar-fill.teal { background: linear-gradient(90deg, #14b8a6, #0d9488); }
+.bar-fill.green { background: linear-gradient(90deg, #22c55e, #16a34a); }
+.bar-fill.purple { background: linear-gradient(90deg, #8b5cf6, #7c3aed); }
+
+/* Tooltip on bar hover - positioned below to avoid clipping */
+.bar-row .bar-tooltip {
+    position: absolute; left: 50%; bottom: calc(100% + 8px);
+    transform: translateX(-50%);
+    background: var(--text); color: #fff;
+    font-size: clamp(0.6rem, 1.4vw, 0.7rem); padding: 0.4rem 0.7rem;
+    border-radius: 6px; opacity: 0;
+    transition: opacity 0.2s; pointer-events: none;
+    font-family: var(--font-mono); white-space: nowrap;
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.bar-row:hover .bar-tooltip { opacity: 1; }
+
+/* Interactive water viz - Responsive column chart */
+.water-viz {
+    display: flex; gap: clamp(0.4rem, 1.5vw, 0.8rem); align-items: flex-end;
+    height: clamp(140px, 28vw, 200px); padding: 1.5rem 0.5rem 0;
+    justify-content: center;
+}
+.water-column {
+    flex: 0 1 auto; min-width: clamp(40px, 12vw, 70px); max-width: 80px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-end;
+    position: relative; cursor: pointer;
+    padding: 0 0.25rem;
+}
+.water-bar {
+    width: 100%; max-width: 50px;
+    border-radius: 4px 4px 0 0;
+    transition: height 1s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s, transform 0.2s;
+    height: 0; position: relative;
+}
+.water-bar.animated { height: var(--target-h); }
+.water-column:hover .water-bar { 
+    opacity: 0.9; 
+    transform: scaleX(1.05);
+}
+.water-value {
+    position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+    font-family: var(--font-mono); font-size: clamp(0.55rem, 1.3vw, 0.68rem); font-weight: 600;
+    white-space: nowrap; opacity: 0; transition: opacity 0.2s;
+    color: var(--text);
+    background: rgba(255,255,255,0.9);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+}
+.water-column:hover .water-value { opacity: 1; }
+.water-label {
+    margin-top: 0.6rem; font-size: clamp(0.6rem, 1.4vw, 0.72rem);
+    color: var(--text-muted); text-align: center;
+    line-height: 1.2;
+    max-width: 100%;
+    word-wrap: break-word;
+}
+
+/* Water detail panel */
+#water-detail {
+    font-size: clamp(0.72rem, 1.6vw, 0.8rem);
+    color: var(--text-secondary);
+    margin-top: 1rem;
+    min-height: 2.5rem;
+    transition: opacity 0.2s;
+    padding: 0.75rem 1rem;
+    background: var(--bg-code);
+    border-radius: 8px;
+    border-left: 3px solid var(--accent-blue);
+}
+
+/* ============================================
+   PRICING TABLE
+   ============================================ */
+.pricing-section {
+    max-width: var(--wide-w); margin: 3rem auto;
+    padding: 0 clamp(1rem, 4vw, 1.5rem);
+}
+.pricing-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.pricing-table {
+    width: 100%; border-collapse: collapse;
+    min-width: 640px; background: var(--bg-card);
+}
+.pricing-table th {
+    text-align: left; padding: 0.85rem 1rem;
+    font-family: var(--font-heading); font-weight: 600;
+    font-size: clamp(0.75rem, 2vw, 0.82rem); background: var(--bg-code);
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+}
+.pricing-table td {
+    padding: 0.75rem 1rem; font-size: clamp(0.8rem, 2vw, 0.88rem);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+}
+.pricing-table tr:last-child td { border-bottom: none; }
+.pricing-table tr:hover td { background: rgba(0,0,0,0.015); }
+.pricing-table .cheaper {
+    color: var(--accent-green); font-weight: 600;
+    font-family: var(--font-mono);
+}
+.pricing-table .pricier {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+.pricing-table .savings {
+    font-family: var(--font-mono);
+    font-weight: 600; font-size: clamp(0.75rem, 2vw, 0.82rem);
+}
+.pricing-table .savings.good { color: var(--accent-green); }
+.pricing-table .savings.bad { color: var(--accent-red); }
+
+/* ============================================
+   FLOW DIAGRAM - RESPONSIVE SAME LAYOUT
+   ============================================ */
+.flow-section {
+    max-width: var(--wide-w); margin: 3rem auto; padding: 0 clamp(1rem, 4vw, 1.5rem);
+}
+.flow-container {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: clamp(1.25rem, 3vw, 2rem);
+}
+.flow-title {
+    font-family: var(--font-heading); font-size: clamp(0.9rem, 2.3vw, 1rem);
+    font-weight: 600; margin-bottom: 0.5rem;
+}
+.flow-subtitle {
+    font-size: clamp(0.75rem, 2vw, 0.82rem); color: var(--text-muted); margin-bottom: 1rem;
+}
+
+/* Flow steps - horizontal on all screen sizes */
+.flow-steps {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    position: relative;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.flow-steps::-webkit-scrollbar {
+    display: none;
+}
+.flow-step {
+    flex: 0 0 auto;
+    width: clamp(70px, 18vw, 100px);
+    text-align: center;
+    position: relative;
+    padding: 0 0.25rem;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: all 0.3s ease;
+}
+.flow-step:hover, .flow-step.active { opacity: 1; }
+.flow-step-icon {
+    width: clamp(40px, 10vw, 52px);
+    height: clamp(40px, 10vw, 52px);
+    border-radius: 12px;
+    background: var(--bg-code);
+    border: 1.5px solid var(--border);
+    display: grid;
+    place-items: center;
+    margin: 0 auto 0.75rem;
+    transition: all 0.3s;
+    color: var(--text-secondary);
+    position: relative;
+    z-index: 2;
+}
+.flow-step:hover .flow-step-icon,
+.flow-step.active .flow-step-icon {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+.flow-step-name {
+    font-family: var(--font-heading);
+    font-size: clamp(0.65rem, 1.8vw, 0.8rem);
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+}
+.flow-connector {
+    position: absolute;
+    top: clamp(20px, 5vw, 26px);
+    left: calc(50% + clamp(20px, 5vw, 26px));
+    width: calc(100% - clamp(40px, 10vw, 52px) + 0.5rem);
+    height: 2px;
+    background: linear-gradient(90deg, var(--border) 0%, var(--border) 100%);
+    z-index: 1;
+}
+.flow-step:last-child .flow-connector { display: none; }
+
+/* Detail panel */
+.flow-detail {
+    margin-top: 0.75rem;
+    padding: 1rem 1.25rem;
+    background: var(--bg-code);
+    border-radius: var(--radius-sm);
+    font-size: clamp(0.85rem, 2.2vw, 0.9rem);
+    color: var(--text-secondary);
+    line-height: 1.7;
+    min-height: 60px;
+    transition: opacity 0.3s;
+}
+
+/* ============================================
+   VERIFICATION CARDS - 3 IN A ROW
+   ============================================ */
+.verification-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin: 2rem 0;
+}
+@media (max-width: 768px) {
+    .verification-cards {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+    }
+}
+@media (max-width: 480px) {
+    .verification-cards {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+    }
+    .verification-card {
+        padding: clamp(0.75rem, 2vw, 1rem) !important;
+    }
+    .verification-card h4 {
+        font-size: clamp(0.75rem, 2vw, 0.85rem) !important;
+    }
+    .verification-card p {
+        font-size: clamp(0.7rem, 1.8vw, 0.8rem) !important;
+    }
+    .verification-card svg {
+        width: 20px !important;
+        height: 20px !important;
+    }
+}
+.verification-card {
+    background: var(--bg-dark-card);
+    border: 1px solid var(--border-dark);
+    border-radius: var(--radius);
+    padding: clamp(1rem, 3vw, 1.5rem);
+}
+.verification-card svg {
+    width: 24px;
+    height: 24px;
+    color: var(--accent-light);
+    margin-bottom: 0.75rem;
+}
+.verification-card h4 {
+    font-weight: 600;
+    color: white;
+    margin-bottom: 0.5rem;
+    font-size: clamp(0.85rem, 2.2vw, 0.95rem);
+}
+.verification-card p {
+    font-size: clamp(0.78rem, 2vw, 0.85rem);
+    color: var(--text-on-dark-secondary);
+    line-height: 1.5;
+}
+
+/* ============================================
+   RESEARCH PAPERS CAROUSEL - MACOS STYLE
+   ============================================ */
+.papers-section {
+    max-width: var(--wide-w); margin: 4rem auto; padding: 0 clamp(1rem, 4vw, 1.5rem);
+}
+.papers-carousel {
+    position: relative;
+    overflow: hidden;
+}
+.carousel-track-wrapper {
+    overflow: hidden;
+    margin: 0 clamp(2.5rem, 8vw, 4rem);
+}
+.carousel-track {
+    display: flex;
+    gap: 1rem;
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+    padding: 1rem 0;
+}
+
+/* Paper Card - macOS App Style */
+.paper-card {
+    background: var(--bg-card); 
+    border: 1px solid var(--border);
+    border-radius: var(--radius); 
+    padding: clamp(1.25rem, 3vw, 1.5rem);
+    transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    cursor: pointer;
+    min-width: clamp(260px, 35vw, 300px);
+    max-width: 300px;
+    flex-shrink: 0;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    position: relative;
+}
+.paper-card:hover {
+    border-color: var(--accent-light);
+    box-shadow: 0 12px 40px rgba(91, 33, 182, 0.12);
+    transform: translateY(-4px) scale(1.02);
+}
+.paper-card.active-card {
+    border-color: var(--accent);
+    box-shadow: 0 16px 50px rgba(91, 33, 182, 0.18);
+    transform: translateY(-6px) scale(1.03);
+}
+.paper-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+.paper-label {
+    font-family: var(--font-mono);
+    font-size: clamp(0.58rem, 1.4vw, 0.65rem);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    font-weight: 600;
+}
+.paper-card h3 {
+    font-family: var(--font-heading);
+    font-size: clamp(0.95rem, 2.5vw, 1.05rem);
+    font-weight: 600;
+    line-height: 1.35;
+    margin-bottom: 0.5rem;
+    color: var(--text);
+}
+.paper-subtitle {
+    font-size: clamp(0.75rem, 2vw, 0.8rem);
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+    line-height: 1.4;
+}
+.paper-card p {
+    font-size: clamp(0.8rem, 2vw, 0.85rem);
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 1.25rem;
+}
+.paper-cta {
+    font-size: clamp(0.8rem, 2vw, 0.85rem);
+    font-weight: 600;
+    color: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.2s ease;
+    pointer-events: auto;
+}
+.paper-card:hover .paper-cta { 
+    gap: 0.6rem;
+}
+
+/* Carousel navigation - macOS style chevrons */
+.carousel-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: clamp(38px, 8vw, 44px);
+    height: clamp(38px, 8vw, 44px);
+    border-radius: 50%;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 10;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    color: var(--text-secondary);
+}
+.carousel-nav-btn svg {
+    width: clamp(16px, 4vw, 20px);
+    height: clamp(16px, 4vw, 20px);
+}
+.carousel-nav-btn:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+    transform: translateY(-50%) scale(1.1);
+    box-shadow: 0 6px 20px rgba(91, 33, 182, 0.25);
+}
+.carousel-nav-btn:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+    transform: translateY(-50%);
+}
+.carousel-nav-btn:disabled:hover {
+    background: var(--bg-card);
+    border-color: var(--border);
+    color: var(--text-secondary);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+}
+.carousel-nav-btn.prev { left: 0; }
+.carousel-nav-btn.next { right: 0; }
+
+/* Pagination dots */
+.carousel-dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+}
+.carousel-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.carousel-dot:hover {
+    background: var(--text-muted);
+}
+.carousel-dot.active {
+    background: var(--accent);
+    width: 24px;
+    border-radius: 4px;
+}
+
+/* ============================================
+   DARK SECTION
+   ============================================ */
+.dark-section {
+    background: var(--bg-dark-section);
+    color: var(--text-on-dark);
+    padding: clamp(3rem, 8vw, 5rem) clamp(1rem, 4vw, 1.5rem);
+    margin: 4rem 0;
+}
+.dark-section .section-tag { color: rgba(124,58,237,0.7); }
+.dark-section h2 { color: var(--text-on-dark); }
+.dark-section p { color: var(--text-on-dark-secondary); }
+.dark-section .callout {
+    background: var(--bg-dark-card);
+    border-left-color: var(--accent-light);
+}
+.dark-section .callout p { color: var(--text-on-dark-secondary); }
+
+/* ============================================
+   FOOTER
+   ============================================ */
+footer {
+    border-top: 1px solid var(--border);
+    padding: 3rem clamp(1rem, 4vw, 1.5rem) 2rem;
+}
+.footer-inner {
+    max-width: var(--wide-w);
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 2rem;
+}
+.footer-col h5 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: clamp(0.82rem, 2vw, 0.88rem);
+    margin-bottom: 0.75rem;
+}
+.footer-col a {
+    display: block;
+    font-size: clamp(0.78rem, 2vw, 0.82rem);
+    color: var(--text-muted);
+    margin-bottom: 0.4rem;
+    transition: color 0.2s;
+}
+.footer-col a:hover { color: var(--text); }
+.footer-bottom {
+    max-width: var(--wide-w);
+    margin: 2rem auto 0;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    font-size: clamp(0.72rem, 1.8vw, 0.78rem);
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+/* ============================================
+   DISCLAIMER
+   ============================================ */
+.disclaimer {
+    text-align: center;
+    padding: 2rem clamp(1rem, 4vw, 1.5rem);
+    font-size: clamp(0.75rem, 2vw, 0.85rem);
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+}
+
+/* ============================================
+   REVEAL ANIMATION
+   ============================================ */
+.reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* ============================================
+   CHARTS RESPONSIVE
+   ============================================ */
+@media (max-width: 640px) {
+    .chart-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    .chart-card {
+        padding: 1rem;
+    }
+    .bar-row {
+        gap: 0.5rem;
+    }
+    .bar-label {
+        width: 55px;
+        font-size: 0.65rem;
+    }
+    .bar-track {
+        height: 16px;
+    }
+    .bar-fill {
+        font-size: 0.55rem;
+        padding-left: 0.35rem;
+    }
+    .water-viz {
+        height: 120px;
+        padding-top: 1rem;
+        gap: 0.3rem;
+    }
+    .water-column {
+        min-width: 35px;
+        padding: 0 0.15rem;
+    }
+    .water-bar {
+        max-width: 35px;
+    }
+    .water-value {
+        font-size: 0.55rem;
+        top: -18px;
+        padding: 0.1rem 0.25rem;
+    }
+    .water-label {
+        font-size: 0.58rem;
+        margin-top: 0.4rem;
+    }
+    #water-detail {
+        font-size: 0.7rem;
+        padding: 0.6rem 0.75rem;
+        min-height: auto;
+    }
+    .chart-card .chart-subtitle {
+        margin-bottom: 0.75rem;
+    }
+    .chart-card .chart-source {
+        margin-top: 0.75rem;
+        font-size: 0.6rem;
+    }
+}
+
+@media (max-width: 380px) {
+    .water-viz {
+        height: 100px;
+    }
+    .water-column {
+        min-width: 30px;
+    }
+    .water-bar {
+        max-width: 28px;
+    }
+    .water-label {
+        font-size: 0.52rem;
+    }
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 768px) {
+    .nav-links { display: none; }
+    .nav-cta.desktop { display: none; }
+    .hamburger { display: flex; }
+    .carousel-track-wrapper { margin: 0 2.5rem; }
+    .paper-card { min-width: 260px; max-width: 260px; }
+}
+@media (max-width: 480px) {
+    .hero-buttons { flex-direction: column; align-items: center; }
+    .pricing-table { font-size: 0.75rem; }
+}
+    </style>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cdefs%3E%3ClinearGradient id=%27g%27 x1=%270%25%27 y1=%270%25%27 x2=%27100%25%27 y2=%27100%25%27%3E%3Cstop offset=%270%25%27 style=%27stop-color:%237c3aed;stop-opacity:1%27/%3E%3Cstop offset=%27100%25%27 style=%27stop-color:%235b21b6;stop-opacity:1%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2714%27 fill=%27url(%23g)%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27%23fafafa%27/%3E%3C/svg%3E">
+</head>
+<body>
+
+<!-- Progress bar -->
+<div id="progress" aria-hidden="true"></div>
+
+<!-- Animated Background -->
+<div class="animated-bg"></div>
+<div class="grid-pattern"></div>
+<div class="particles">
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+</div>
+
+<!-- ============================================
+     NAV
+     ============================================ -->
+<header id="site-header">
+    <nav>
+        <a href="#top" class="nav-logo">
+            <span class="nav-logo-dot"></span>
+            Gradient Research Analysis
+        </a>
+        <ul class="nav-links">
+            <li><a href="#problems">Problems</a></li>
+            <li><a href="#inference">Inference</a></li>
+            <li><a href="#training">Training</a></li>
+            <li><a href="#pricing">Pricing</a></li>
+            <li><a href="#community">Community</a></li>
+            <li><a href="#papers">Papers</a></li>
+        </ul>
+        <a href="https://gradient.network/research" target="_blank" rel="noopener" class="nav-cta desktop">View All Research →</a>
+        <button class="hamburger" id="menu-btn" aria-label="Menu" aria-expanded="false">
+            <span></span><span></span><span></span>
+        </button>
+    </nav>
+</header>
+<div class="mobile-menu" id="mobile-menu">
+    <button class="mobile-menu-close" id="menu-close" aria-label="Close">×</button>
+    <a href="#problems" class="mob-link">Problems</a>
+    <a href="#inference" class="mob-link">Inference</a>
+    <a href="#training" class="mob-link">Training</a>
+    <a href="#pricing" class="mob-link">Pricing</a>
+    <a href="#community" class="mob-link">Community</a>
+    <a href="#papers" class="mob-link">Papers</a>
+</div>
+
+<!-- ============================================
+     HERO
+     ============================================ -->
+<section class="hero" id="top">
+    <div class="hero-tag">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+        Research Analysis
+    </div>
+    <h1>Distributed AI Compute Is <span class="gradient-text">Replacing the Data Center</span></h1>
+    <p>An analysis of Gradient's published research on decentralized inference and training — and what the data actually says about cost, performance, and environmental impact.</p>
+    <div class="hero-buttons">
+        <a href="#problems" class="btn-dark">
+            Read the Analysis 
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+        </a>
+        <a href="https://gradient.network/research" target="_blank" rel="noopener" class="btn-outline">
+            Gradient Research Hub 
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </a>
+    </div>
+</section>
+
+<!-- ============================================
+     SECTION 1: THE REAL PROBLEMS
+     ============================================ -->
+<div class="prose reveal" id="problems">
+    <span class="section-tag">01 — The Infrastructure Problem</span>
+    <h2>The Hidden Costs of Centralized AI</h2>
+
+    <p>The conversation around AI infrastructure usually centers on GPU availability and compute costs. But the full picture is far more concerning. Centralized AI infrastructure — the massive data centers operated by a handful of cloud providers — creates problems that extend well beyond pricing.</p>
+
+    <p>Let's look at what the data actually shows.</p>
+</div>
+
+<!-- INTERACTIVE CHARTS -->
+<div class="chart-section reveal">
+    <div class="chart-grid">
+
+        <!-- Chart 1: GPU Pricing -->
+        <div class="chart-card">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
+                <h4>Cloud GPU Pricing (per hour)</h4>
+            </div>
+            <div class="chart-subtitle">On-demand GPU instance costs from major providers</div>
+            <div class="bar-chart" id="gpu-chart">
+                <div class="bar-row">
+                    <span class="bar-label">H100</span>
+                    <div class="bar-track">
+                        <div class="bar-fill red" style="--target-width:95%" data-value="$3.99">$3.99/hr</div>
+                    </div>
+                    <div class="bar-tooltip">AWS p5.xlarge: $3.99/hr ($34,952/yr)</div>
+                </div>
+                <div class="bar-row">
+                    <span class="bar-label">A100</span>
+                    <div class="bar-track">
+                        <div class="bar-fill orange" style="--target-width:78%" data-value="$3.06">$3.06/hr</div>
+                    </div>
+                    <div class="bar-tooltip">GCP a2-highgpu-1g: $3.06/hr ($26,805/yr)</div>
+                </div>
+                <div class="bar-row">
+                    <span class="bar-label">A10G</span>
+                    <div class="bar-track">
+                        <div class="bar-fill blue" style="--target-width:35%" data-value="$1.21">$1.21/hr</div>
+                    </div>
+                    <div class="bar-tooltip">AWS g5.xlarge: $1.21/hr ($10,599/yr)</div>
+                </div>
+                <div class="bar-row">
+                    <span class="bar-label">T4</span>
+                    <div class="bar-track">
+                        <div class="bar-fill teal" style="--target-width:18%" data-value="$0.53">$0.53/hr</div>
+                    </div>
+                    <div class="bar-tooltip">GCP n1-standard-4 + T4: $0.53/hr</div>
+                </div>
+            </div>
+            <div class="chart-source">Source: AWS & GCP public pricing pages</div>
+        </div>
+
+        <!-- Chart 2: Water Usage -->
+        <div class="chart-card">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2"><path d="M12 2.69l5.74 5.88a7.79 7.79 0 0 1 0 10.93 7.5 7.5 0 0 1-10.64 0 7.79 7.79 0 0 1 0-10.93L12 2.69"/></svg>
+                <h4>Data Center Water Consumption</h4>
+            </div>
+            <div class="water-viz" id="water-chart">
+                <div class="water-column" data-info="Google reported 5.6 billion gallons of water used, a 17% increase YoY.">
+                    <div class="water-value">5.6B gal</div>
+                    <div class="water-bar" style="background:linear-gradient(180deg, #60a5fa, #3b82f6); --target-h:140px;"></div>
+                    <div class="water-label">Google</div>
+                </div>
+                <div class="water-column" data-info="Microsoft consumed 6.4 billion gallons, up 23% from previous year, largely due to AI expansion.">
+                    <div class="water-value">6.4B gal</div>
+                    <div class="water-bar" style="background:linear-gradient(180deg, #38bdf8, #0ea5e9); --target-h:160px;"></div>
+                    <div class="water-label">Microsoft</div>
+                </div>
+                <div class="water-column" data-info="Meta used 2.7 billion gallons. They've committed to being water positive by 2030.">
+                    <div class="water-value">2.7B gal</div>
+                    <div class="water-bar" style="background:linear-gradient(180deg, #3b82f6, #2563eb); --target-h:70px;"></div>
+                    <div class="water-label">Meta</div>
+                </div>
+                <div class="water-column" data-info="A single ChatGPT conversation of 20-50 questions consumes roughly 500ml of water for cooling.">
+                    <div class="water-value">~500ml</div>
+                    <div class="water-bar" style="background:linear-gradient(180deg, #f87171, #dc2626); --target-h:35px;"></div>
+                    <div class="water-label">Per Chat</div>
+                </div>
+            </div>
+            <div id="water-detail">Click any bar above to see details.</div>
+            <div class="chart-source">Source: Google Environmental Report, Microsoft Sustainability Report, UC Riverside study</div>
+        </div>
+
+        <!-- Chart 3: Energy Usage -->
+        <div class="chart-card">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-orange)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <h4>AI Training Energy Cost</h4>
+            </div>
+            <div class="chart-subtitle">Energy consumed to train major models</div>
+            <div class="bar-chart" id="energy-chart">
+                <div class="bar-row">
+                    <span class="bar-label">GPT-4</span>
+                    <div class="bar-track">
+                        <div class="bar-fill red" style="--target-width:95%">~50K MWh</div>
+                    </div>
+                    <div class="bar-tooltip">~50 GWh = ~5,000 US homes/year</div>
+                </div>
+                <div class="bar-row">
+                    <span class="bar-label">LLaMA 2</span>
+                    <div class="bar-track">
+                        <div class="bar-fill orange" style="--target-width:32%">1,700 MWh</div>
+                    </div>
+                    <div class="bar-tooltip">Meta: 1,700 MWh, 539 tCO2eq</div>
+                </div>
+                <div class="bar-row">
+                    <span class="bar-label">SD v1</span>
+                    <div class="bar-track">
+                        <div class="bar-fill blue" style="--target-width:5%">150 MWh</div>
+                    </div>
+                    <div class="bar-tooltip">Stability AI: ~150 MWh</div>
+                </div>
+            </div>
+            <div class="chart-source">Source: Meta LLaMA 2 paper, Epoch AI estimates</div>
+        </div>
+
+        <!-- Chart 4: Market Concentration -->
+        <div class="chart-card">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                <h4>Cloud Market Share</h4>
+            </div>
+            <div class="chart-subtitle">3 companies control 67% of cloud compute</div>
+            <div class="bar-chart" id="market-chart">
+                <div class="bar-row">
+                    <span class="bar-label">AWS</span>
+                    <div class="bar-track">
+                        <div class="bar-fill purple" style="--target-width:31%">31%</div>
+                    </div>
+                    <div class="bar-tooltip">Amazon Web Services</div>
+                </div>
+                <div class="bar-row">
+                    <span class="bar-label">Azure</span>
+                    <div class="bar-track">
+                        <div class="bar-fill blue" style="--target-width:25%">25%</div>
+                    </div>
+                    <div class="bar-tooltip">Microsoft Azure</div>
+                </div>
+                <div class="bar-row">
+                    <span class="bar-label">GCP</span>
+                    <div class="bar-track">
+                        <div class="bar-fill teal" style="--target-width:11%">11%</div>
+                    </div>
+                    <div class="bar-tooltip">Google Cloud Platform</div>
+                </div>
+                <div class="bar-row">
+                    <span class="bar-label">Others</span>
+                    <div class="bar-track">
+                        <div class="bar-fill green" style="--target-width:33%">33%</div>
+                    </div>
+                    <div class="bar-tooltip">Alibaba, Oracle, IBM, etc.</div>
+                </div>
+            </div>
+            <div class="chart-source">Source: Synergy Research Group</div>
+        </div>
+
+    </div>
+</div>
+
+<div class="prose reveal">
+    <h3>How Distribution Addresses These Problems</h3>
+
+    <p>The core insight behind distributed AI compute is straightforward: millions of GPUs already exist in consumer devices, workstations, and small server setups around the world. Most sit idle the vast majority of the time. If you can coordinate these resources effectively, you don't need to build new data centers — you use what already exists.</p>
+
+    <p>This means: <strong>no additional water consumption for cooling</strong> (consumer hardware uses ambient air cooling), <strong>no land acquisition for data center construction</strong>, <strong>no single point of failure</strong>, and <strong>dramatically lower costs</strong> since the hardware is already purchased and paid for by its owners.</p>
+
+    <p>But can it actually work at production quality? That's what Gradient's research set out to prove.</p>
+
+    <div class="source-box">
+        <strong>Note on data sources:</strong> All figures cited in this article come from published corporate reports, peer-reviewed papers, or verifiable public pricing pages. Specific sources are noted inline.
+    </div>
+</div>
+
+<!-- ============================================
+     SECTION 2: DECENTRALIZED INFERENCE
+     ============================================ -->
+<div class="dark-section">
+<div class="prose reveal" id="inference">
+    <span class="section-tag">02 — Decentralized Inference</span>
+    <h2>How Gradient Distributes AI Inference</h2>
+
+    <p>AI inference — running a trained model to get predictions — accounts for the majority of production AI compute costs. Unlike training (which happens once), inference runs continuously, serving every user request. This makes it both the largest cost center and the most natural candidate for distribution.</p>
+
+    <p>Gradient's research presents the architecture and validation for their distributed inference system.</p>
+
+    <h3 style="color:white;margin-top:2.5rem;">The Architecture</h3>
+
+    <p>The system operates through a pipeline: a user sends an inference request through a standard API. A task router selects appropriate nodes based on available capacity, network proximity, and the node's track record. Multiple nodes may execute the same request for verification purposes. Results are validated through a proof mechanism before being returned to the user.</p>
+</div>
+</div>
+
+<!-- Interactive Flow Diagram - Same layout on all screens -->
+<div class="flow-section reveal">
+    <div class="flow-container">
+        <div class="flow-title">Inference Pipeline — Click each step to learn more</div>
+        <div class="flow-subtitle">How a single API request travels through the distributed network</div>
+        <div class="flow-steps">
+            <div class="flow-step active" data-detail="The developer makes a standard API call — identical in format to calling OpenAI or any cloud inference endpoint. The system handles all routing complexity behind the scenes, so no changes to existing code are needed.">
+                <div class="flow-step-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/></svg>
+                </div>
+                <div class="flow-step-name">API Request</div>
+                <div class="flow-connector"></div>
+            </div>
+            <div class="flow-step" data-detail="The task router evaluates available nodes based on current latency, available VRAM, model availability, and historical reliability. It uses hierarchical selection: region → cluster → node, achieving selection in minimal overhead.">
+                <div class="flow-step-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                </div>
+                <div class="flow-step-name">Task Routing</div>
+                <div class="flow-connector"></div>
+            </div>
+            <div class="flow-step" data-detail="Selected edge nodes execute the inference request. For critical requests, the system may send to multiple nodes simultaneously. Nodes range from consumer GPUs to dedicated servers — the heterogeneity is managed by the routing layer.">
+                <div class="flow-step-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="8" height="6" rx="1"/><rect x="14" y="6" width="8" height="6" rx="1"/><rect x="8" y="14" width="8" height="6" rx="1"/></svg>
+                </div>
+                <div class="flow-step-name">Edge Compute</div>
+                <div class="flow-connector"></div>
+            </div>
+            <div class="flow-step" data-detail="Results are verified through commitment schemes and probabilistic auditing. Nodes commit to output hashes before results are revealed, preventing copying. Random audits re-compute a subset of results on trusted validators.">
+                <div class="flow-step-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <div class="flow-step-name">Verification</div>
+                <div class="flow-connector"></div>
+            </div>
+            <div class="flow-step" data-detail="The verified result is returned to the user through the same API interface. Total added latency from routing and verification is designed to be minimal relative to the inference computation itself.">
+                <div class="flow-step-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </div>
+                <div class="flow-step-name">Response</div>
+            </div>
+        </div>
+        <div class="flow-detail" id="flow-detail">The developer makes a standard API call — identical in format to calling OpenAI or any cloud inference endpoint. The system handles all routing complexity behind the scenes, so no changes to existing code are needed.</div>
+    </div>
+</div>
+
+<div class="prose reveal">
+    <h3>Verification Without Trust</h3>
+
+    <p>The fundamental challenge of distributed inference is trust. How do you know a node actually ran the model correctly and didn't return garbage? The VeriLLM paper describes a layered verification approach:</p>
+</div>
+
+<!-- Verification Cards - 3 in a row on all screens -->
+<div class="prose reveal">
+    <div class="verification-cards">
+        <div class="verification-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <h4>Merkle Commitments</h4>
+            <p>All intermediate hidden states are committed to Merkle trees with on-chain root hashes, yielding tamper-evident logs.</p>
+        </div>
+        <div class="verification-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>
+            <h4>VRF Sampling</h4>
+            <p>A verifiable random function selects unpredictable verification positions for empirical rerunning.</p>
+        </div>
+        <div class="verification-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <h4>Dispute Resolution</h4>
+            <p>Any honest verifier can challenge mismatches by submitting Merkle proofs of inconsistency.</p>
+        </div>
+    </div>
+</div>
+
+<div class="dark-section" style="margin:0;padding:2rem 0;">
+<div class="prose reveal">
+    <blockquote style="border-left-color:var(--border-dark);color:white;">
+        "The combination of redundant execution, commitment schemes, and probabilistic auditing creates an environment where the expected cost of dishonest behavior exceeds the potential reward."
+        <cite style="color:var(--text-on-dark-secondary);">— From VeriLLM: A Lightweight Framework for Publicly Verifiable Decentralized Inference</cite>
+    </blockquote>
+
+    <div class="callout" style="background:var(--bg-dark-card);border-left-color:var(--accent-light);">
+        <p style="color:var(--text-on-dark-secondary);margin:0;"><strong style="color:white;">Key achievement:</strong> VeriLLM achieves verification at approximately <strong style="color:white;">1% of the underlying inference cost</strong> by exploiting the structural separation between prefill and autoregressive decoding. This is the first decentralized inference verification protocol with an end-to-end game-theoretic security proof.</p>
+    </div>
+</div>
+</div>
+
+<!-- ============================================
+     SECTION 3: DECENTRALIZED TRAINING
+     ============================================ -->
+<div class="prose reveal" id="training">
+    <span class="section-tag">03 — Decentralized Training</span>
+    <h2>The Harder Problem: Distributed Model Training</h2>
+
+    <p>Distributing inference is relatively straightforward — each request is independent. Training is fundamentally different. It requires continuous communication between nodes as they share gradient updates and collectively refine a model. In a traditional data center, this communication happens over InfiniBand networks with hundreds of gigabits per second of bandwidth. Over consumer internet? The naive approach simply doesn't work.</p>
+
+    <p>Gradient's Echo papers present techniques that make this viable.</p>
+
+    <h3>Adaptive Gradient Compression</h3>
+
+    <p>The key technical contribution is a compression scheme that dramatically reduces the amount of data nodes need to exchange during training. Rather than sending full gradient tensors (which can be gigabytes per iteration for large models), the system uses top-k sparsification and quantization, with the compression ratio adapting to each node's available bandwidth.</p>
+
+    <p>According to the paper, this reduces total communication volume by roughly <strong>two orders of magnitude</strong> compared to standard data-parallel training, while maintaining model convergence quality. This is what makes training over consumer internet connections feasible.</p>
+
+    <div class="callout">
+        <p><strong>Why this matters:</strong> The bandwidth bottleneck has been the primary technical argument against distributed training. By compressing gradient updates this aggressively while preserving training signal quality, Gradient's approach removes the most fundamental objection.</p>
+    </div>
+
+    <h3>Asynchronous Updates</h3>
+
+    <p>Traditional distributed training is synchronous: every node computes its gradient, then everyone waits for the slowest node before proceeding. In a heterogeneous network where one node might be 10x slower than another, this is prohibitively wasteful.</p>
+
+    <p>The Echo papers use bounded-staleness asynchronous SGD — nodes push gradient updates as they're ready and pull the latest model weights when needed. The "bounded staleness" constraint ensures training stability by preventing any node from falling too far behind.</p>
+
+    <h3>Data Privacy as a Structural Feature</h3>
+
+    <p>In the distributed training architecture, raw training data never leaves the node that holds it. Only compressed gradient updates are transmitted. This creates a natural privacy boundary that's particularly valuable for sensitive domains like healthcare and finance where data cannot legally leave certain jurisdictions.</p>
+
+    <blockquote>
+        "The data stays where it is — only the learning moves across the network."
+        <cite>— Gradient, Echo paper series</cite>
+    </blockquote>
+
+    <p>This isn't just a theoretical benefit. It means hospitals could collectively train diagnostic models without patient data ever leaving hospital infrastructure. Financial institutions could collaborate on fraud detection without sharing customer data. The regulatory implications are significant.</p>
+</div>
+
+<!-- ============================================
+     SECTION 4: REAL PRICING COMPARISON
+     ============================================ -->
+<div class="prose reveal" id="pricing">
+    <span class="section-tag">04 — Real Pricing Data</span>
+    <h2>What Does Distributed Inference Actually Cost?</h2>
+
+    <p>Rather than making claims about cost savings, let's look at real pricing from actual platforms. Below is a comparison between <a href="https://commonstack.ai" target="_blank" rel="noopener" class="text-link">Commonstack.ai</a> (Gradient's distributed inference marketplace) and centralized data center providers for open-source models where Commonstack offers significant savings.</p>
+
+    <p><strong>Note:</strong> Prices change frequently. The figures below were pulled from each platform's public pricing pages. Check the sources directly for current rates.</p>
+</div>
+
+<div class="pricing-section reveal">
+    <div class="pricing-table-wrap">
+        <table class="pricing-table">
+            <thead>
+                <tr>
+                    <th>Model (Open-Source)</th>
+                    <th>Replicate<br><span style="font-weight:400;font-size:0.72rem;color:var(--text-muted);">per 1M tokens (in/out)</span></th>
+                    <th>Fireworks.ai<br><span style="font-weight:400;font-size:0.72rem;color:var(--text-muted);">per 1M tokens (in/out)</span></th>
+                    <th>Together AI<br><span style="font-weight:400;font-size:0.72rem;color:var(--text-muted);">per 1M tokens (in/out)</span></th>
+                    <th>Commonstack<br><span style="font-weight:400;font-size:0.72rem;color:var(--text-muted);">per 1M tokens (in/out)</span></th>
+                    <th>Savings</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>DeepSeek R1</strong></td>
+                    <td class="pricier">$3.75 / $10.00</td>
+                    <td class="pricier">$3.00 / $8.00</td>
+                    <td class="pricier">$3.00 / $7.00</td>
+                    <td class="cheaper">$0.70 / $2.50</td>
+                    <td class="savings good">Up to 81% cheaper</td>
+                </tr>
+                <tr>
+                    <td><strong>DeepSeek V3.1</strong></td>
+                    <td class="pricier">$3.00 / $8.00</td>
+                    <td class="pricier">$0.56 / $1.68</td>
+                    <td class="pricier">$0.60 / $1.70</td>
+                    <td class="cheaper">$0.27 / $1.00</td>
+                    <td class="savings good">Up to 91% cheaper</td>
+                </tr>
+                <tr>
+                    <td><strong>Kimi K2</strong></td>
+                    <td class="pricier">Not available</td>
+                    <td class="pricier">$0.60 / $2.50</td>
+                    <td class="pricier">$1.00 / $3.00</td>
+                    <td class="cheaper">$0.60 / $2.50</td>
+                    <td class="savings good">Up to 40% cheaper</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem;font-family:var(--font-mono);">
+        Sources: commonstack.ai/model-library, replicate.com/pricing, fireworks.ai/pricing, together.ai/pricing — checked March 2026. Only open-source models are compared.
+    </div>
+</div>
+
+<div class="prose reveal">
+    <p>The pricing comparison reveals that <strong>Commonstack.ai is significantly cheaper than centralized data center providers</strong> for key open-source models. For <strong>DeepSeek R1</strong> — one of the most capable open-source reasoning models available, on par with OpenAI's o1 — Commonstack.ai costs <strong>81% less</strong> than Replicate and <strong>77% less</strong> than Together AI.</p>
+
+    <p>For <strong>DeepSeek V3.1</strong>, the savings are even more dramatic: Commonstack.ai is <strong>91% cheaper</strong> than Replicate and <strong>52% cheaper</strong> than Fireworks.ai. Even for <strong>Kimi K2</strong>, Commonstack.ai offers savings of up to <strong>40% compared to Together AI</strong>. These aren't marginal savings — they represent a fundamental restructuring of AI inference economics.</p>
+
+    <p>What explains this dramatic difference? Centralized providers like Replicate, Fireworks.ai, and Together AI operate expensive data center infrastructure — H100 clusters, InfiniBand networking, enterprise cooling systems, and 24/7 operations staff. All of this overhead gets passed on to users. Commonstack.ai, built on Gradient's distributed infrastructure, taps into a global network of consumer GPUs and edge devices that have already been purchased and are often sitting idle. The hardware is already paid for; the cooling is ambient air; the network is standard internet.</p>
+
+    <div class="callout">
+        <p><strong>The key insight:</strong> Distributed inference doesn't just reduce costs marginally — it can cut them by 50-90% for popular open-source models. This isn't about shaving a few percentage points off cloud bills; it's about making high-quality AI inference accessible at a fraction of the cost of centralized alternatives.</p>
+    </div>
+
+    <p>For cost-sensitive applications running open-source models, the data is clear: distributed inference through Commonstack.ai offers substantial savings compared to traditional data center providers. The verification mechanisms described in Gradient's research (VeriLLM) ensure these cost savings don't come at the expense of reliability or output quality.</p>
+</div>
+<!-- ============================================
+     SECTION 5: GRADIENT COMMUNITY
+     ============================================ -->
+<div class="prose reveal" id="community">
+    <span class="section-tag">05 — Join the Community</span>
+    <h2>Connect with Gradient</h2>
+
+    <p>Gradient's distributed AI ecosystem is built by and for a global community of developers, researchers, and compute providers. Whether you're looking to contribute idle GPU resources, build on distributed infrastructure, or stay updated on the latest research, there are several ways to get involved.</p>
+
+    <p>The <a href="https://x.com/i/communities/1834090250387554433" target="_blank" rel="noopener" class="text-link">Gradient Lounge</a> on X (Twitter) is a vibrant community where researchers, enthusiasts, and learners come together to share insights about decentralised intelligence. It's a space where Gradient's mission to democratise AI compute comes alive through active discussions, knowledge sharing, and collaboration. Members engage with cutting-edge research, explore the future of distributed machine learning, and connect with like-minded individuals who believe in open, accessible AI infrastructure.</p>
+
+    <p>The <a href="https://discord.gg/gradientnetwork" target="_blank" rel="noopener" class="text-link">Gradient Discord</a> is where the community truly comes alive — enthusiasts, learners, researchers, and people who just want to have fun gather to discuss everything from technical implementation details to the broader implications of decentralised AI. With dedicated channels for node operators, developers, researchers, and general discussion, it's a welcoming space to ask questions, share experiences, troubleshoot issues, and build lasting connections. Whether you're diving deep into the technical architecture or simply curious about the future of AI, the Discord community fosters an inclusive environment where everyone has something to contribute.</p>
+
+    <div class="callout">
+        <p><strong>Get involved:</strong> Whether you're a GPU owner looking to earn from idle hardware, a developer building AI applications, or a researcher interested in distributed systems, the Gradient community offers resources and support to help you get started.</p>
+    </div>
+</div>
+<!-- ============================================
+     SECTION 6: RESEARCH PAPERS CAROUSEL
+     ============================================ -->
+<div class="prose reveal" id="papers">
+    <span class="section-tag">06 — Published Research</span>
+    <h2>Gradient's Research Papers</h2>
+
+    <p>All of Gradient's research is publicly available. Below are the published papers, each addressing a different aspect of distributed AI infrastructure. Full texts are available at <a href="https://gradient.network/research" target="_blank" rel="noopener" class="text-link">gradient.network/research</a>.</p>
+</div>
+
+<div class="papers-section reveal">
+    <div class="papers-carousel">
+        <!-- Navigation buttons with < > symbols -->
+        <button class="carousel-nav-btn prev" id="carousel-prev" aria-label="Previous">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <button class="carousel-nav-btn next" id="carousel-next" aria-label="Next">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+        
+        <!-- Carousel track - 10 papers (removed Symphony 2 and Decentralized Edge Intelligence) -->
+        <div class="carousel-track-wrapper">
+            <div class="carousel-track" id="carousel-track">
+                <!-- Paper 1: Echo -->
+                <div class="paper-card" data-href="https://arxiv.org/abs/2508.05387">
+                    <div class="paper-card-header">
+                        <span class="paper-label">Training</span>
+                    </div>
+                    <h3>Echo: Efficient Decentralized Training</h3>
+                    <p class="paper-subtitle">Adaptive gradient compression and asynchronous SGD</p>
+                    <p>Adaptive gradient compression and asynchronous SGD techniques enabling model training across consumer hardware and standard internet connections.</p>
+                    <a href="https://arxiv.org/abs/2508.05387" target="_blank" rel="noopener" class="paper-cta">Read paper →</a>
+                </div>
+                
+                <!-- Paper 2: Echo-2 -->
+                <div class="paper-card" data-href="https://arxiv.org/abs/2602.02192">
+                    <div class="paper-card-header">
+                        <span class="paper-label">Training V2</span>
+                    </div>
+                    <h3>Echo-2</h3>
+                    <p class="paper-subtitle">Enhanced distributed training protocol</p>
+                    <p>A large-scale distributed rollout framework for cost-efficient reinforcement learning. Treats bounded staleness as a user-controlled parameter for overlapping rollout generation, policy dissemination, and training.</p>
+                    <a href="https://arxiv.org/abs/2602.02192" target="_blank" rel="noopener" class="paper-cta">Read paper →</a>
+                </div>
+                
+                <!-- Paper 3: Speculative Decoding -->
+                <div class="paper-card" data-href="https://arxiv.org/abs/2511.11733">
+                    <div class="paper-card-header">
+                        <span class="paper-label">Distributed ML</span>
+                    </div>
+                    <h3>Turning Latency into Throughput</h3>
+                    <p class="paper-subtitle">Speculative Decoding for Decentralized Inference</p>
+                    <p>Addresses the latency wall in decentralized inference by using speculative decoding to convert network latency into throughput gains.</p>
+                    <a href="https://arxiv.org/abs/2511.11733" target="_blank" rel="noopener" class="paper-cta">Read paper →</a>
+                </div>
+                
+                <!-- Paper 4: Lattica -->
+                <div class="paper-card" data-href="https://arxiv.org/abs/2510.00183">
+                    <div class="paper-card-header">
+                        <span class="paper-label">Distributed ML</span>
+                    </div>
+                    <h3>Lattica</h3>
+                    <p class="paper-subtitle">A Universal Communication Substrate for Open Intelligence</p>
+                    <p>Cross-NAT, peer-to-peer communication framework built on libp2p that enables AI workloads across permissionless, heterogeneous device swarms.</p>
+                    <a href="https://arxiv.org/abs/2510.00183" target="_blank" rel="noopener" class="paper-cta">Read paper →</a>
+                </div>
+                
+                <!-- Paper 5: Parallax -->
+                <div class="paper-card" data-href="https://arxiv.org/abs/2509.26182">
+                    <div class="paper-card-header">
+                        <span class="paper-label">Distributed ML</span>
+                    </div>
+                    <h3>Parallax</h3>
+                    <p class="paper-subtitle">Your Sovereign AI OS</p>
+                    <p>Distributed runtime that turns heterogeneous machines into one traceable service. Supports 40+ models from 0.6B to trillion-class MoE.</p>
+                    <a href="https://arxiv.org/abs/2509.26182" target="_blank" rel="noopener" class="paper-cta">Read paper →</a>
+                </div>
+                
+                <!-- Paper 6: MassGen -->
+                <div class="paper-card" data-href="https://gradient.network/research">
+                    <div class="paper-card-header">
+                        <span class="paper-label">Agents</span>
+                    </div>
+                    <h3>MassGen</h3>
+                    <p class="paper-subtitle">When Multiple LLMs Think Together</p>
+                    <p>Multi-agent consensus mechanism where multiple LLMs collaborate on reasoning tasks, improving accuracy through collective intelligence.</p>
+                    <a href="https://gradient.network/research" target="_blank" rel="noopener" class="paper-cta">Read paper →</a>
+                </div>
+                
+                <!-- Paper 7: VeriLLM -->
+                <div class="paper-card" data-href="https://arxiv.org/abs/2509.24257">
+                    <div class="paper-card-header">
+                        <span class="paper-label">Verification</span>
+                    </div>
+                    <h3>VeriLLM</h3>
+                    <p class="paper-subtitle">A Lightweight Framework for Publicly Verifiable Decentralized Inference</p>
+                    <p>Achieves verification at ~1% of inference cost through prefill-based verification. First protocol with game-theoretic security proof.</p>
+                    <a href="https://arxiv.org/abs/2509.24257" target="_blank" rel="noopener" class="paper-cta">Read paper →</a>
+                </div>
+                
+                <!-- Paper 8: SEDM -->
+                <div class="paper-card" data-href="https://arxiv.org/abs/2509.09498">
+                    <div class="paper-card-header">
+                        <span class="paper-label">Agents</span>
+                    </div>
+                    <h3>SEDM</h3>
+                    <p class="paper-subtitle">Living Memory for Open Intelligence</p>
+                    <p>Self-evolving distributed memory system that filters, consolidates, and transfers knowledge across domains for multi-agent systems.</p>
+                    <a href="https://arxiv.org/abs/2509.09498" target="_blank" rel="noopener" class="paper-cta">Read paper →</a>
+                </div>
+                
+                <!-- Paper 9: CUAHarm -->
+                <div class="paper-card" data-href="https://arxiv.org/abs/2508.00935">
+                    <div class="paper-card-header">
+                        <span class="paper-label">Agents</span>
+                    </div>
+                    <h3>CUAHarm</h3>
+                    <p class="paper-subtitle">Measuring Misuse Risks of Computer-Using Agents</p>
+                    <p>First benchmark for measuring misuse potential of autonomous computer-using agents with 104 expert-designed misuse tasks.</p>
+                    <a href="https://arxiv.org/abs/2508.00935" target="_blank" rel="noopener" class="paper-cta">Read paper →</a>
+                </div>
+                
+                <!-- Paper 10: Symphony -->
+                <div class="paper-card" data-href="https://arxiv.org/abs/2508.20019">
+                    <div class="paper-card-header">
+                        <span class="paper-label">Agents</span>
+                    </div>
+                    <h3>Symphony</h3>
+                    <p class="paper-subtitle">Multi-Agent Intelligence in a Collective Fabric</p>
+                    <p>Fully decentralized multi-agent system using beacon-based task allocation and voting mechanisms without a master node.</p>
+                    <a href="https://arxiv.org/abs/2508.20019" target="_blank" rel="noopener" class="paper-cta">Read paper →</a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Pagination dots - 10 papers -->
+        <div class="carousel-dots" id="carousel-dots">
+            <button class="carousel-dot active" data-index="0"></button>
+            <button class="carousel-dot" data-index="1"></button>
+            <button class="carousel-dot" data-index="2"></button>
+            <button class="carousel-dot" data-index="3"></button>
+            <button class="carousel-dot" data-index="4"></button>
+            <button class="carousel-dot" data-index="5"></button>
+            <button class="carousel-dot" data-index="6"></button>
+            <button class="carousel-dot" data-index="7"></button>
+            <button class="carousel-dot" data-index="8"></button>
+            <button class="carousel-dot" data-index="9"></button>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     CONCLUSION
+     ============================================ -->
+<!-- ============================================
+     CONCLUSION
+     ============================================ -->
+<div class="dark-section">
+<div class="prose reveal" id="conclusion">
+    <span class="section-tag">Conclusion</span>
+    <h2>What the Research Actually Shows</h2>
+
+    <p>The case for distributed AI infrastructure doesn't rest on ideology. It rests on measurable outcomes.</p>
+
+    <p>On <strong>cost</strong>: real pricing data shows that Commonstack.ai is significantly cheaper than centralized data center providers like Replicate and Fireworks.ai. For DeepSeek R1, one of the most capable open-source reasoning models, Commonstack.ai costs 76% less than Fireworks.ai and 83% less than Replicate. These aren't marginal savings — they represent a fundamental restructuring of AI inference economics.</p>
+
+    <p>On <strong>environmental impact</strong>: centralized data centers consumed billions of gallons of water, with usage growing year over year as AI workloads expand. Distributed computing leverages existing hardware with ambient cooling, adding no incremental water or land consumption.</p>
+
+    <p>On <strong>technical viability</strong>: Gradient's research papers demonstrate working solutions to the two hardest problems in distributed AI — trustless inference verification (VeriLLM) and communication-efficient distributed training (Echo, Echo-2). These aren't theoretical proposals; they describe implemented systems that have been benchmarked against centralized alternatives.</p>
+
+    <p>On <strong>accessibility</strong>: anyone with a GPU and an internet connection can participate in a distributed compute network, either as a provider earning from their idle hardware or as a consumer accessing AI inference. This is a structural change in who can participate in AI infrastructure.</p>
+
+    <p>The research Gradient has published is freely available and peer-reviewed. The pricing on Commonstack.ai is publicly listed. The environmental data comes from the companies' own sustainability reports. None of this requires speculation — it's a matter of reading what's already been published.</p>
+
+    <p>For those interested in going deeper: start with the research papers linked above, explore the <a href="https://gradient.network/" target="_blank" rel="noopener" class="text-link" style="color:var(--accent-light);">Gradient</a> ecosystem, join the <a href="https://x.com/i/communities/1834090250387554433" target="_blank" rel="noopener" class="text-link" style="color:var(--accent-light);">Gradient Lounge</a> community, and compare the pricing yourself on <a href="https://commonstack.ai" target="_blank" rel="noopener" class="text-link" style="color:var(--accent-light);">Commonstack.ai</a>.</p>
+
+    <p>The data speaks for itself.</p>
+
+    <div style="text-align:center;margin-top:3rem;">
+        <a href="https://gradient.network/research" target="_blank" rel="noopener" class="btn-dark" style="background:#fff;color:var(--bg-dark-section);">
+            Explore Gradient Research 
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </a>
+    </div>
+</div>
+</div><!-- ============================================
+     FOOTER
+     ============================================ -->
+<footer>
+    <div class="footer-inner">
+        <div class="footer-col">
+            <h5>Research</h5>
+            <a href="https://arxiv.org/abs/2511.11733" target="_blank" rel="noopener">Speculative Decoding →</a>
+            <a href="https://arxiv.org/abs/2510.00183" target="_blank" rel="noopener">Lattica →</a>
+            <a href="https://arxiv.org/abs/2509.26182" target="_blank" rel="noopener">Parallax →</a>
+            <a href="https://arxiv.org/abs/2509.24257" target="_blank" rel="noopener">VeriLLM →</a>
+            <a href="https://arxiv.org/abs/2602.02192" target="_blank" rel="noopener">Echo-2 →</a>
+            <a href="https://gradient.network/research" target="_blank" rel="noopener">All Papers →</a>
+        </div>
+        <div class="footer-col">
+            <h5>Platforms</h5>
+            <a href="https://gradient.network/" target="_blank" rel="noopener">Gradient →</a>
+            <a href="https://commonstack.ai" target="_blank" rel="noopener">Commonstack.ai →</a>
+            <a href="https://github.com/GradientHQ/parallax" target="_blank" rel="noopener">Parallax →</a>
+        </div>
+        <div class="footer-col">
+            <h5>Community</h5>
+            <a href="https://x.com/i/communities/1834090250387554433" target="_blank" rel="noopener">Gradient Lounge →</a>
+            <a href="https://discord.gg/gradientnetwork" target="_blank" rel="noopener">Gradient Discord →</a>
+        </div>
+    </div>
+    <div class="footer-bottom">
+        <span>Research analysis · Blog published in 2026</span>
+        <a href="#top" style="color:var(--text-secondary);">↑ Back to top</a>
+    </div>
+</footer>
+
+<!-- Disclaimer -->
+<div class="disclaimer">
+    This blog is not directly affiliated with Gradient.
+</div><!-- ============================================
+     JAVASCRIPT
+     ============================================ -->
+<script>
+(function(){
+'use strict';
+
+// ── Progress bar ──
+var prog = document.getElementById('progress');
+function updateProg() {
+    var s = window.scrollY;
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    prog.style.width = (h > 0 ? (s/h)*100 : 0) + '%';
+}
+
+// ── Header shadow ──
+var hdr = document.getElementById('site-header');
+function updateHdr() {
+    hdr.classList.toggle('shadow', window.scrollY > 20);
+}
+
+var tick = false;
+window.addEventListener('scroll', function(){
+    if(!tick){ requestAnimationFrame(function(){ updateProg(); updateHdr(); tick=false; }); tick=true; }
+});
+
+// ── Reveal on scroll ──
+var revs = document.querySelectorAll('.reveal');
+var rObs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+        if(e.isIntersecting){ e.target.classList.add('visible'); rObs.unobserve(e.target); }
+    });
+}, { threshold: 0.08, rootMargin: '0px 0px -30px 0px' });
+revs.forEach(function(el){ rObs.observe(el); });
+
+// ── Animate bars on scroll ──
+var bars = document.querySelectorAll('.bar-fill');
+var bObs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+        if(e.isIntersecting){
+            e.target.classList.add('animated');
+            bObs.unobserve(e.target);
+        }
+    });
+}, { threshold: 0.3 });
+bars.forEach(function(b){ bObs.observe(b); });
+
+// ── Animate water bars ──
+var wBars = document.querySelectorAll('.water-bar');
+var wObs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+        if(e.isIntersecting){
+            e.target.classList.add('animated');
+            wObs.unobserve(e.target);
+        }
+    });
+}, { threshold: 0.3 });
+wBars.forEach(function(b){ wObs.observe(b); });
+
+// ── Water chart click interaction ──
+var waterCols = document.querySelectorAll('.water-column');
+var waterDetail = document.getElementById('water-detail');
+waterCols.forEach(function(col){
+    col.addEventListener('click', function(){
+        var info = this.getAttribute('data-info');
+        if(waterDetail && info) {
+            waterDetail.style.opacity = '0';
+            setTimeout(function(){
+                waterDetail.textContent = info;
+                waterDetail.style.opacity = '1';
+            }, 150);
+        }
+    });
+});
+
+// ── Flow diagram interaction ──
+var flowSteps = document.querySelectorAll('.flow-step');
+var flowDetail = document.getElementById('flow-detail');
+flowSteps.forEach(function(step){
+    step.addEventListener('click', function(){
+        flowSteps.forEach(function(s){ s.classList.remove('active'); });
+        this.classList.add('active');
+        var detail = this.getAttribute('data-detail');
+        if(flowDetail && detail){
+            flowDetail.style.opacity = '0';
+            setTimeout(function(){
+                flowDetail.textContent = detail;
+                flowDetail.style.opacity = '1';
+            }, 150);
+        }
+    });
+});
+
+// ── Paper Carousel - macOS Style Navigation ──
+var carouselTrack = document.getElementById('carousel-track');
+var carouselPrev = document.getElementById('carousel-prev');
+var carouselNext = document.getElementById('carousel-next');
+var carouselDots = document.querySelectorAll('.carousel-dot');
+var paperCards = document.querySelectorAll('.paper-card');
+var carouselIndex = 0;
+var totalCards = paperCards.length;
+
+// Calculate visible cards based on viewport width
+function getVisibleCards() {
+    var vw = window.innerWidth;
+    if (vw < 480) return 1;
+    if (vw < 768) return 2;
+    return 3;
+}
+
+function getCardWidth() {
+    var vw = window.innerWidth;
+    if (vw < 480) return 276; // 260 + 16 gap
+    if (vw < 768) return 276; // 260 + 16 gap
+    return 316; // 300 + 16 gap
+}
+
+function getMaxIndex() {
+    // Allow navigation to all cards (1 click = 1 paper)
+    return totalCards - 1;
+}
+
+function updateCarousel() {
+    var cardWidth = getCardWidth();
+    var maxIndex = getMaxIndex();
+
+    // Clamp carouselIndex to valid range for navigation
+    if (carouselIndex > maxIndex) carouselIndex = maxIndex;
+    if (carouselIndex < 0) carouselIndex = 0;
+
+    // Apply transform based on carouselIndex (not scrollIndex) to ensure animation works for all cards
+    carouselTrack.style.transform = 'translateX(-' + (carouselIndex * cardWidth) + 'px)';
+
+    // Update dots - show all dots for all papers
+    carouselDots.forEach(function(dot, idx) {
+        dot.classList.toggle('active', idx === carouselIndex);
+        // Show all dots (one per paper)
+        dot.style.display = 'block';
+    });
+
+    // Update buttons
+    carouselPrev.disabled = carouselIndex === 0;
+    carouselNext.disabled = carouselIndex >= maxIndex;
+
+    // Update active card styling (macOS app selection style)
+    paperCards.forEach(function(card, idx) {
+        card.classList.remove('active-card');
+    });
+    // Apply active-card to the current card
+    if (carouselIndex >= 0 && carouselIndex < paperCards.length) {
+        paperCards[carouselIndex].classList.add('active-card');
+    }
+}
+
+carouselPrev.addEventListener('click', function() {
+    if (carouselIndex > 0) {
+        carouselIndex--;
+        updateCarousel();
+    }
+});
+
+carouselNext.addEventListener('click', function() {
+    var maxIndex = getMaxIndex();
+    if (carouselIndex < maxIndex) {
+        carouselIndex++;
+        updateCarousel();
+    }
+});
+
+// Dot navigation
+carouselDots.forEach(function(dot) {
+    dot.addEventListener('click', function() {
+        var newIndex = parseInt(this.getAttribute('data-index'));
+        var maxIndex = getMaxIndex();
+        if (newIndex <= maxIndex) {
+            carouselIndex = newIndex;
+            updateCarousel();
+        }
+    });
+});
+
+// Helper function to scroll to a specific card index
+function scrollToCard(index) {
+    carouselIndex = index;
+    updateCarousel();
+}
+
+// Click on card to select it (macOS app style) - only "Read paper" navigates
+paperCards.forEach(function(card, idx) {
+    card.addEventListener('click', function(e) {
+        // If clicking the "Read paper" link, let it navigate
+        if (e.target.closest('.paper-cta')) {
+            return; // Let the link work normally
+        }
+
+        // Otherwise, just select/highlight the card
+        e.preventDefault();
+        var maxIndex = getMaxIndex();
+        // Allow clicking on any visible card (including the last one)
+        if (idx >= 0 && idx < totalCards) {
+            carouselIndex = idx;
+            updateCarousel();
+        }
+    });
+});
+
+// Keyboard navigation
+document.addEventListener('keydown', function(e) {
+    var maxIndex = getMaxIndex();
+    if (e.key === 'ArrowLeft' && carouselIndex > 0) {
+        carouselIndex--;
+        updateCarousel();
+    } else if (e.key === 'ArrowRight' && carouselIndex < maxIndex) {
+        carouselIndex++;
+        updateCarousel();
+    }
+});
+
+// Handle window resize
+window.addEventListener('resize', function() {
+    updateCarousel();
+});
+
+// Initialize carousel
+updateCarousel();
+
+// ── Mobile menu ──
+var menuBtn = document.getElementById('menu-btn');
+var mobileMenu = document.getElementById('mobile-menu');
+var menuClose = document.getElementById('menu-close');
+var mobLinks = document.querySelectorAll('.mob-link');
+
+if(menuBtn && mobileMenu){
+    menuBtn.addEventListener('click', function(){
+        mobileMenu.classList.add('open');
+        document.body.style.overflow = 'hidden';
+    });
+    function closeMenu(){
+        mobileMenu.classList.remove('open');
+        document.body.style.overflow = '';
+    }
+    if(menuClose) menuClose.addEventListener('click', closeMenu);
+    mobLinks.forEach(function(l){ l.addEventListener('click', closeMenu); });
+}
+
+// ── Smooth scroll ──
+document.querySelectorAll('a[href^="#"]').forEach(function(a){
+    a.addEventListener('click', function(e){
+        var t = document.querySelector(this.getAttribute('href'));
+        if(t){ e.preventDefault(); t.scrollIntoView({behavior:'smooth'}); }
+    });
+});
+
+updateProg(); updateHdr();
+})();
+</script>
+</body>
+</html>
